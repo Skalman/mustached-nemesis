@@ -1,0 +1,7 @@
+TODO
+
+* write the first characters of a db/table name to select it
+* Mac: possibly, check if there are any default shortcuts that use alt, and if so, don't trigger any in-page shortcuts
+* search "tessaf" vs "tesssaf" tesssafact
+	test_baseconvert.owa_referer
+	test_baseconvert.owa_commerce_transaction_fact

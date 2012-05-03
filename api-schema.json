@@ -1,0 +1,35 @@
+{
+	"myfalse": {
+		"type" : "boolean",
+		"enum": [false]
+	},
+
+
+	"id" : "scheme://api-response#",
+	"type" : "object",
+	"properties" : {
+		"error" : {
+			"type" : [{ "$ref": "scheme://api-response#/myfalse" }],
+			"default" : false
+		},
+		"q" : {
+			"type" : "array",
+			"items" : {
+				"type" : "object",
+				"properties" : {
+					"columns" : {
+						"type" : "array",
+						"items" : { "type" : "string" }
+					},
+					"data" : {
+						"type" : "array",
+						"items" : { "type" : "array" }
+					},
+					"error" : {
+						"default" : false
+					}
+				}
+			}
+		}
+	}
+}
