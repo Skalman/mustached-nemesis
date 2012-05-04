@@ -49,6 +49,10 @@ $(function () {
 	// key codes
 	var KEY_TAB = 9,
 		KEY_ENTER = 13,
+		KEY_SHIFT = 16,
+		KEY_CTRL = 17,
+		KEY_ALT = 18,
+		KEY_META = -1, // TODO what's the real code?
 		KEY_ESCAPE = 27,
 		KEY_PG_UP = 33,
 		KEY_PG_DOWN = 34,
@@ -891,7 +895,8 @@ $(function () {
 		}
 		function show_results_in($selection_list, matches) {
 			var i, key, obj, match, html,
-				matches_showing = {};
+				matches_showing = {},
+				showing_results = [];
 			$selection_list.text("");
 			for (i = 0; i < 20 && i < matches.length; i++) {
 				match = matches[i];
@@ -899,13 +904,16 @@ $(function () {
 				key = obj.type === "db" ? obj.db : obj.db + "." + obj.table;
 				if (matches_showing[key] !== true) {
 					matches_showing[key] = true;
+					showing_results.push(obj);
 					html = '<a href="">' + (obj.search_table_only ? obj.db + "." : "") + mark(match) + '</a>';
 					$("<li>", {html: html}).appendTo($selection_list);
 				}
 			}
+			return showing_results;
 		}
-		var i, j, matches_current, matches_other, search_term, match, obj, html, key,
-			search_data_current, search_data_other;
+		var i, j, matches_current, matches_other, search_term,
+			search_data_current, search_data_other,
+			showing_results_current, showing_results_other;
 
 		// split search_data into current and other
 		if (current_db === undefined) {
@@ -938,29 +946,39 @@ $(function () {
 		//con.log(search_data_other.map(function (i) { return ""+i}));
 		//con.log(matches_other.slice(0,10));
 
-		show_results_in($search_current_results, matches_current);
-		show_results_in($search_other_results, matches_other);
+		showing_results_current = show_results_in($search_current_results, matches_current);
+		showing_results_other = show_results_in($search_other_results, matches_other);
 
 		$search_links = $search_content.find("a");
-		showing_search_results = matches_current.concat(matches_other);
+		showing_search_results = showing_results_current.concat(showing_results_other);
 		search_current_result_pos = undefined;
-		focus_search_result(0);
+		focus_search_result(0, false);
 
 		$search.removeClass(ALL_SEARCH_CLASSES);
-		$search.addClass(matches_current.length ? "current-results" : "current-noresults");
-		$search.addClass(matches_other.length ? "other-results" : "other-noresults");
-		$search.addClass(current_db === undefined ? "current-is-dbs" : "current-is-indb");
+		$search.addClass([matches_current.length ? "current-results" : "current-noresults",
+			matches_other.length ? "other-results" : "other-noresults",
+			current_db === undefined ? "current-is-dbs" : "current-is-indb"
+		].join(" "));
 	}
-	function focus_search_result(pos) {
+	function focus_search_result(pos, focus_element) {
 		if ($search_links[pos]) {
 			if (search_current_result_pos !== undefined) {
 				$($search_links[search_current_result_pos]).removeClass("selected");
 			}
 			search_current_result_pos = pos;
 			$($search_links[pos]).addClass("selected");
+			if (focus_element === undefined || focus_element) {
+				$($search_links[pos]).focus();
+			}
 			scroll_search_pos();
 		}
-	}
+/*		var tmp = showing_search_results[pos];
+		if (tmp) {
+			con.log(tmp.type === "db" ? tmp.db : tmp.db + "." + tmp.table);
+		} else {
+			con.log(showing_search_results[pos]);
+		}
+*/	}
 	function scroll_search_pos() {
 		var focus_elem = $search_links[search_current_result_pos],
 			search_content_offset = parseInt($search_content.css("border-top-width"), 10),
@@ -983,7 +1001,7 @@ $(function () {
 		}
 	}
 	function search_select(pos) {
-		var item = showing_search_results[pos].text,
+		var item = showing_search_results[pos],
 			db = item.db,
 			table = item.table,
 			type = item.type;
@@ -1052,29 +1070,60 @@ $(function () {
 		});
 	}
 
-	$search_input.on({
-		focus: clear_search_timeout,
-		blur: function () {
-			if (this.value === "") {
-				delayed_hide_search();
-			}
-		},
-		keydown: function (e) {
-			var to_focus,
-				which = e.which;
-			if (which === KEY_ESCAPE) {
-				hide_search_and_focus();
-			} else if (which === KEY_ENTER) {
+	function search_keydown(e) {
+		var to_focus,
+			which = e.which;
+		if (which === KEY_ESCAPE) {
+			hide_search_and_focus();
+			e.stopPropagation();
+		} else if (which === KEY_ENTER) {
+			e.preventDefault();
+			search_select(search_current_result_pos);
+		} else if (which === KEY_DOWN || which === KEY_UP || which === KEY_PG_DOWN || which === KEY_PG_UP) {
+			to_focus = navigate_list_keydown(which, search_current_result_pos, $search_links.length);
+			if (to_focus !== false) {
+				focus_search_result(to_focus);
 				e.preventDefault();
-				search_select(search_current_result_pos);
-			} else if (which === KEY_DOWN || which === KEY_UP || which === KEY_PG_DOWN || which === KEY_PG_UP) {
-				to_focus = navigate_list_keydown(which, search_current_result_pos, $search_links.length);
-				if (to_focus !== false) {
-					focus_search_result(to_focus);
-					e.preventDefault();
+			}
+		} else {
+			if (this !== $search_input[0]) {
+				if (which !== KEY_TAB && which !== KEY_SHIFT && which !== KEY_CTRL && which !== KEY_ALT && which !== KEY_META) {
+					$search_input.focus();
+					e.stopPropagation();
+				} else {
+					con.log(which);
 				}
 			}
+		}
+	}
+	function search_blur() {
+		if ($search_input.val() === "") {
+			delayed_hide_search();
+		}
+	}
+	$search_content.on({
+		focus: function () {
+			clear_search_timeout();
+			var pos = index_of.call($search_links, this);
+			focus_search_result(pos, false);
 		},
+		blur: search_blur,
+		keydown: search_keydown,
+		click: function (e) {
+			e.preventDefault();
+			var pos = index_of.call($search_links, this);
+			search_select(pos);
+		},
+		mouseenter: function (e) {
+			var pos = index_of.call($search_links, this);
+			focus_search_result(pos, false);
+			$search_input.focus();
+		}
+	}, "a");
+	$search_input.on({
+		focus: clear_search_timeout,
+		blur: search_blur,
+		keydown: search_keydown,
 		keyup: function (e) {
 			var purge_needed;
 			if (last_search_value !== this.value) {
